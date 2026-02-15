@@ -1984,12 +1984,15 @@ class UI:
                     # 操作背包物品（存入仓库）
                     if inventory and 0 <= self.selected_inventory_item < len(inventory):
                         item = inventory[self.selected_inventory_item]
-                        # 从背包移除
-                        player.item_manager.remove_item(self.selected_inventory_item)
+                        quantity = item.quantity
+                        # 从背包移除（传入完整数量确保完全移除）
+                        player.item_manager.remove_item(self.selected_inventory_item, quantity)
                         # 添加到仓库
-                        self.storage_items.append({'name': item.name, 'quantity': item.quantity})
+                        self.storage_items.append({'name': item.name, 'quantity': quantity})
                         # 更新选中索引
-                        self.selected_inventory_item = min(self.selected_inventory_item, len(inventory) - 2)  # 减2因为列表长度减少了1
+                        # 重新获取更新后的背包长度
+                        updated_inventory = player.item_manager.get_inventory()
+                        self.selected_inventory_item = min(self.selected_inventory_item, len(updated_inventory) - 1)
                         # 保存数据
                         if hasattr(self.game, 'data_storage'):
                             self.game.data_storage.save_storage_data(self.storage_items)
