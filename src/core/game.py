@@ -23,8 +23,12 @@ class Game:
         pygame.init()
         print("Pygame initialized successfully")
         
+        # 初始化声音系统
+        pygame.mixer.init()
+        print("Sound system initialized successfully")
+        
         # 设置窗口大小和标题
-        self.width, self.height = 1024, 768  # 增大默认窗口大小
+        self.width, self.height = 1280, 800  # 增大默认窗口大小
         # 创建可调整大小的窗口
         print(f"Creating window: {self.width}x{self.height}")
         self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
@@ -69,6 +73,15 @@ class Game:
         # 初始化数据存储系统
         self.data_storage = DataStorage(self)
         
+        # 初始化鼠标悬停信息
+        self.hovered_item = None
+        
+        # 商人菜单
+        self.show_merchant_menu = False
+        self.current_merchant = None
+        self.selected_merchant_option = 0
+        self.merchant_options = ["打开商店", "物品回收"]
+        
         # 注释掉自动存档选择，让用户在主菜单中手动选择继续游戏
         # if self.data_storage.has_saved_data():
         #     # 有存档，显示存档选择界面
@@ -103,13 +116,27 @@ class Game:
                 # 处理窗口大小调整
                 self.width, self.height = event.w, event.h
                 self.screen = pygame.display.set_mode((self.width, self.height), pygame.RESIZABLE)
+            elif event.type == pygame.MOUSEMOTION:
+                # 处理鼠标移动，更新悬停信息
+                if self.game_state == GameState.GAME:
+                    pos = pygame.mouse.get_pos()
+                    self.hovered_item = self.ui.handle_hover(pos)
             
             # 处理保存提示事件
-            if self.ui.show_save_prompt:
+            if hasattr(self.ui, 'show_save_prompt') and self.ui.show_save_prompt:
                 self.ui.handle_save_prompt_events(event)
-            elif self.ui.show_name_input:
+            elif hasattr(self.ui, 'show_name_input') and self.ui.show_name_input:
                 # 处理角色名称输入事件
                 self.ui.handle_name_input_events(event)
+            elif hasattr(self.ui, 'show_storage') and self.ui.show_storage:
+                # 处理仓库事件
+                self.ui.handle_storage_events(event)
+            elif hasattr(self.ui, 'show_recycle') and self.ui.show_recycle:
+                # 处理回收事件
+                self.ui.handle_recycle_events(event)
+            elif hasattr(self, 'show_merchant_menu') and self.show_merchant_menu:
+                # 处理商人菜单事件
+                self.handle_merchant_menu_events(event)
             else:
                 # 根据游戏状态处理事件
                 if self.game_state == GameState.MENU:
@@ -167,16 +194,28 @@ class Game:
                         hotkey = 10
                     
                     # 设置技能快捷键
-                    if hasattr(self.player, 'set_skill_hotkey') and self.ui.selected_skill_index < len(self.player.skills):
-                        self.player.set_skill_hotkey(self.ui.selected_skill_index, hotkey)
+                    if self.ui.selected_skill_index < len(self.player.skills):
+                        # 直接设置技能快捷键映射
+                        self.player.skill_hotkeys[str(hotkey)] = self.ui.selected_skill_index
+                        self.player.hotkey_skills[self.ui.selected_skill_index] = str(hotkey)
+                        
                         # 保存技能快捷键设置
                         if hasattr(self, 'data_storage'):
                             try:
                                 # 保存快捷键设置到玩家数据
-                                # 直接调用save_player_data，它会自动保存所有玩家数据
                                 self.data_storage.save_player_data(1)
                             except Exception as e:
                                 print(f"保存技能快捷键设置失败: {e}")
+                        
+                        # 显示技能设置成功消息
+                        skill = self.player.skills[self.ui.selected_skill_index]
+                        skill_name = skill.get('name', '未知技能')
+                        print(f"技能快捷键设置成功: {skill_name} -> {hotkey}")
+                        
+                        # 添加技能设置消息到聊天框
+                        if hasattr(self, 'ui') and hasattr(self.ui, 'add_game_message'):
+                            message = f"技能快捷键设置成功: {skill_name} -> {hotkey}"
+                            self.ui.add_game_message(message, (255, 215, 0), 3000)
                 
                 # 结束设置状态
                 self.ui.is_setting_skill = False
@@ -207,10 +246,27 @@ class Game:
                 if hotkey == 0:
                     hotkey = 10
                 
-                if hasattr(self.player, 'use_skill_by_hotkey'):
-                    if self.player.use_skill_by_hotkey(hotkey):
-                        # 技能使用成功
-                        pass
+                # 使用技能快捷键映射
+                hotkey_str = str(hotkey)
+                if hotkey_str in self.player.skill_hotkeys:
+                    skill_index = self.player.skill_hotkeys[hotkey_str]
+                    if 0 <= skill_index < len(self.player.skills):
+                        skill = self.player.skills[skill_index]
+                        skill_name = skill['name']
+                        # 尝试自动找到目标
+                        current_map = self.map_manager.get_current_map()
+                        if current_map:
+                            # 使用技能的实际范围找到最近的怪物作为目标
+                            skill_range = skill.get('range', 100)
+                            near_monsters = current_map.get_monsters_near_player(self.player, distance=skill_range)
+                            if near_monsters:
+                                target = near_monsters[0]
+                                if self.player.use_skill(skill_name, target):
+                                    print(f"按{hotkey}键使用技能: {skill_name}！")
+                            else:
+                                # 没有目标，使用技能（可能是范围技能）
+                                if self.player.use_skill(skill_name):
+                                    print(f"按{hotkey}键使用技能: {skill_name}！")
                 else:
                     # 兼容旧版本：直接使用技能索引
                     skill_index = hotkey - 1
@@ -231,10 +287,6 @@ class Game:
                                 # 没有目标，使用技能（可能是范围技能）
                                 if self.player.use_skill(skill_name):
                                     print(f"按{hotkey}键使用技能: {skill_name}！")
-
-
-
-
             elif event.key == pygame.K_F8:
                 # F8显示任务状态+人物显示
                 print("显示任务状态和人物信息")
@@ -265,43 +317,24 @@ class Game:
                 # 与第一个NPC交互
                 npc = near_npcs[0]
                 
-                if hasattr(npc, 'has_shop') and npc.has_shop:
-                    # 打开商店，使用NPC自己的商店物品
-                    shop_items = []
-                    if hasattr(npc, 'shop_items') and npc.shop_items:
-                        from src.core.id_manager import id_manager
-                        for item in npc.shop_items:
-                            # 尝试获取物品ID
-                            item_id = id_manager.get_item_id_by_name(item['name'])
-                            item_info = None
-                            if item_id:
-                                item_info = id_manager.get_item_by_id(item_id)
-                            shop_items.append({"id": item_id, "name": item['name'], "price": item['price'], "quantity": item['quantity'], "info": item_info})
-                    else:
-                        # 默认商店物品
-                        from src.core.id_manager import id_manager
-                        shop_item_ids = [1001, 2001, 2003, 2004, 3001, 3002]
-                        for item_id in shop_item_ids:
-                            item_info = id_manager.get_item_by_id(item_id)
-                            if item_info:
-                                # 根据物品类型设置价格
-                                if item_info['type'] == 'weapon':
-                                    price = 100 if item_id == 1001 else 200
-                                elif item_info['type'] == 'armor':
-                                    price = 50
-                                elif item_info['type'] == 'helmet':
-                                    price = 30
-                                elif item_info['type'] == 'boots':
-                                    price = 20
-                                elif item_info['type'] == 'consumable':
-                                    price = 10 if item_id == 3001 else 15
-                                else:
-                                    price = 50
-                                shop_items.append({"id": item_id, "name": item_info['name'], "price": price, "quantity": 99, "info": item_info})
-                    
-                    # 打开商店界面
-                    self.ui.open_shop(shop_items)
-                    print(f"打开了{npc.name}的商店")
+                # 检查NPC功能类型
+                npc_function = getattr(npc, 'function', None)
+                
+                if npc_function == 'storage':
+                    # 加载公共仓库数据
+                    if hasattr(self, 'data_storage'):
+                        storage_items = self.data_storage.load_storage_data()
+                        self.ui.storage_items = storage_items
+                    # 打开仓库界面
+                    self.ui.show_storage = True
+                    print(f"打开了{npc.name}的公共仓库")
+                elif npc_function == 'recycle' or (hasattr(npc, 'has_shop') and npc.has_shop):
+                    # 先显示选项菜单，让玩家选择是打开商店还是回收
+                    self.show_merchant_menu = True
+                    self.current_merchant = npc
+                    print(f"与{npc.name}对话，选择操作：")
+                    print("1. 打开商店")
+                    print("2. 物品回收")
                 else:
                     # 开始对话
                     dialogue = npc.interact(self.player)
@@ -392,8 +425,21 @@ class Game:
     
     def update(self):
         """更新游戏状态"""
+        # 检查是否有特殊界面打开
+        has_special_ui = False
+        if hasattr(self.ui, 'show_storage') and self.ui.show_storage:
+            has_special_ui = True
+        elif hasattr(self.ui, 'show_recycle') and self.ui.show_recycle:
+            has_special_ui = True
+        elif hasattr(self, 'show_merchant_menu') and self.show_merchant_menu:
+            has_special_ui = True
+        elif hasattr(self.ui, 'show_save_prompt') and self.ui.show_save_prompt:
+            has_special_ui = True
+        elif hasattr(self.ui, 'show_name_input') and self.ui.show_name_input:
+            has_special_ui = True
+        
         # 根据游戏状态更新
-        if self.game_state == GameState.GAME:
+        if self.game_state == GameState.GAME and not has_special_ui:
             self.player.update()
             self.player.update_skills()  # 更新技能状态
             self.map_manager.update()  # 更新地图管理器
@@ -424,14 +470,29 @@ class Game:
             if current_map:
                 self.camera_x = max(0, min(current_map.width - self.width, self.camera_x))
                 self.camera_y = max(0, min(current_map.height - self.height, self.camera_y))
+        else:
+            # 特殊界面打开时，只更新必要的UI元素
+            self.ui.update_item_drops()
+            self.ui.update_damage_texts()
+            self.ui.update_game_messages()
         
     def render(self):
         """渲染游戏"""
         # 填充背景，确保清除所有之前的渲染内容
         self.screen.fill((0, 0, 0))
         
-        # 渲染保存提示
-        if self.ui.show_save_prompt:
+        # 优先渲染特殊界面
+        if hasattr(self.ui, 'show_storage') and self.ui.show_storage:
+            # 渲染仓库界面
+            self.ui.render_storage()
+        elif hasattr(self.ui, 'show_recycle') and self.ui.show_recycle:
+            # 渲染回收界面
+            self.ui.render_recycle()
+        elif hasattr(self, 'show_merchant_menu') and self.show_merchant_menu:
+            # 渲染商人菜单
+            self.render_merchant_menu()
+        elif hasattr(self.ui, 'show_save_prompt') and self.ui.show_save_prompt:
+            # 渲染保存提示
             # 先渲染当前游戏状态
             if self.game_state == GameState.GAME:
                 # 渲染地图（背景）
@@ -453,6 +514,130 @@ class Game:
                 self.ui.render_damage_texts()
                 # 渲染游戏内消息
                 self.ui.render_game_messages()
+                
+                # 渲染鼠标悬停信息
+                if hasattr(self, 'hovered_item') and self.hovered_item:
+                    pos = pygame.mouse.get_pos()
+                    hover_x, hover_y = pos
+                    hover_x += 10
+                    hover_y -= 100  # 大幅向上偏移，确保显示在鼠标上方且不会被遮挡
+                    
+                    # 绘制悬停信息背景
+                    if isinstance(self.hovered_item, dict) and 'name' in self.hovered_item:
+                        # 技能悬停信息
+                        skill_name = self.hovered_item.get('name', '未知技能')
+                        skill_level = self.hovered_item.get('level', 0)
+                        skill_damage = self.hovered_item.get('damage', 0)
+                        skill_range = self.hovered_item.get('range', 0)
+                        skill_cooldown = self.hovered_item.get('cooldown', 0) / 1000  # 转换为秒
+                        skill_description = self.hovered_item.get('description', '无描述')
+                        
+                        # 使用UI中已经加载的支持中文的字体
+                        small_font = self.ui.small_font
+                        
+                        # 计算文本宽度
+                        max_width = max(
+                            small_font.size(skill_name)[0],
+                            small_font.size(f'等级: {skill_level}')[0],
+                            small_font.size(f'伤害: {skill_damage}')[0],
+                            small_font.size(f'范围: {skill_range}')[0],
+                            small_font.size(f'冷却: {skill_cooldown}秒')[0],
+                            small_font.size(skill_description)[0]
+                        )
+                        
+                        # 计算背景高度
+                        background_height = 110
+                        
+                        # 调整悬停信息位置，确保不会超出窗口
+                        if hover_y - background_height < 0:
+                            hover_y = pos[1] + 20  # 如果上方空间不够，显示在鼠标下方
+                        else:
+                            hover_y -= background_height
+                        
+                        # 确保信息不会超出窗口右侧
+                        if hover_x + max_width + 20 > self.width:
+                            hover_x = self.width - max_width - 30
+                        
+                        # 绘制半透明背景
+                        background_rect = pygame.Rect(hover_x, hover_y, max_width + 20, background_height)
+                        # 创建半透明表面
+                        transparent_surface = pygame.Surface((max_width + 20, background_height), pygame.SRCALPHA)
+                        # 填充半透明黑色
+                        transparent_surface.fill((30, 30, 30, 180))  # 最后一个参数是透明度，180表示半透明
+                        # 绘制边框
+                        pygame.draw.rect(transparent_surface, (100, 100, 100, 255), (0, 0, max_width + 20, background_height), 2)
+                        # 绘制到屏幕
+                        self.screen.blit(transparent_surface, (hover_x, hover_y))
+                        
+                        # 绘制技能信息
+                        name_text = small_font.render(skill_name, True, (255, 215, 0))
+                        self.screen.blit(name_text, (hover_x + 10, hover_y + 10))
+                        
+                        level_text = small_font.render(f'等级: {skill_level}', True, (255, 255, 255))
+                        self.screen.blit(level_text, (hover_x + 10, hover_y + 30))
+                        
+                        damage_text = small_font.render(f'伤害: {skill_damage}', True, (255, 0, 0))
+                        self.screen.blit(damage_text, (hover_x + 10, hover_y + 50))
+                        
+                        range_text = small_font.render(f'范围: {skill_range}', True, (0, 255, 0))
+                        self.screen.blit(range_text, (hover_x + 10, hover_y + 70))
+                        
+                        cooldown_text = small_font.render(f'冷却: {skill_cooldown}秒', True, (0, 0, 255))
+                        self.screen.blit(cooldown_text, (hover_x + 10, hover_y + 90))
+                    elif hasattr(self.hovered_item, 'name'):
+                        # 物品悬停信息
+                        item_name = self.hovered_item.name
+                        item_quantity = getattr(self.hovered_item, 'quantity', 1)
+                        item_type = getattr(self.hovered_item, 'type', '未知')
+                        item_description = getattr(self.hovered_item, 'description', '无描述')
+                        
+                        # 使用UI中已经加载的支持中文的字体
+                        small_font = self.ui.small_font
+                        
+                        # 计算文本宽度
+                        max_width = max(
+                            small_font.size(item_name)[0],
+                            small_font.size(f'数量: {item_quantity}')[0],
+                            small_font.size(f'类型: {item_type}')[0],
+                            small_font.size(item_description)[0]
+                        )
+                        
+                        # 计算背景高度
+                        background_height = 80
+                        
+                        # 调整悬停信息位置，确保不会超出窗口
+                        if hover_y - background_height < 0:
+                            hover_y = pos[1] + 20  # 如果上方空间不够，显示在鼠标下方
+                        else:
+                            hover_y -= background_height
+                        
+                        # 确保信息不会超出窗口右侧
+                        if hover_x + max_width + 20 > self.width:
+                            hover_x = self.width - max_width - 30
+                        
+                        # 绘制半透明背景
+                        background_rect = pygame.Rect(hover_x, hover_y, max_width + 20, background_height)
+                        # 创建半透明表面
+                        transparent_surface = pygame.Surface((max_width + 20, background_height), pygame.SRCALPHA)
+                        # 填充半透明黑色
+                        transparent_surface.fill((30, 30, 30, 180))  # 最后一个参数是透明度，180表示半透明
+                        # 绘制边框
+                        pygame.draw.rect(transparent_surface, (100, 100, 100, 255), (0, 0, max_width + 20, background_height), 2)
+                        # 绘制到屏幕
+                        self.screen.blit(transparent_surface, (hover_x, hover_y))
+                        
+                        # 绘制物品信息
+                        name_text = small_font.render(item_name, True, (255, 215, 0))
+                        self.screen.blit(name_text, (hover_x + 10, hover_y + 10))
+                        
+                        quantity_text = small_font.render(f'数量: {item_quantity}', True, (255, 255, 255))
+                        self.screen.blit(quantity_text, (hover_x + 10, hover_y + 25))
+                        
+                        type_text = small_font.render(f'类型: {item_type}', True, (255, 255, 255))
+                        self.screen.blit(type_text, (hover_x + 10, hover_y + 40))
+                        
+                        desc_text = small_font.render(item_description, True, (200, 200, 200))
+                        self.screen.blit(desc_text, (hover_x + 10, hover_y + 55))
             elif self.game_state == GameState.MENU:
                 self.ui.render_menu()
                 # 渲染游戏内消息
@@ -476,7 +661,7 @@ class Game:
             
             # 渲染保存提示对话框
             self.ui.render_save_prompt()
-        elif self.ui.show_name_input:
+        elif hasattr(self.ui, 'show_name_input') and self.ui.show_name_input:
             # 渲染角色名称输入界面
             self.ui.render_name_input()
         else:
@@ -499,6 +684,134 @@ class Game:
                 
                 # 渲染掉落物品提示
                 self.ui.render_item_drops()
+                # 渲染伤害值显示
+                self.ui.render_damage_texts()
+                # 渲染游戏内消息
+                self.ui.render_game_messages()
+                
+                # 渲染鼠标悬停信息
+                if hasattr(self, 'hovered_item') and self.hovered_item:
+                    pos = pygame.mouse.get_pos()
+                    hover_x, hover_y = pos
+                    hover_x += 10
+                    hover_y -= 100  # 大幅向上偏移，确保显示在鼠标上方且不会被遮挡
+                    
+                    # 绘制悬停信息背景
+                    if isinstance(self.hovered_item, dict) and 'name' in self.hovered_item:
+                        # 技能悬停信息
+                        skill_name = self.hovered_item.get('name', '未知技能')
+                        skill_level = self.hovered_item.get('level', 0)
+                        skill_damage = self.hovered_item.get('damage', 0)
+                        skill_range = self.hovered_item.get('range', 0)
+                        skill_cooldown = self.hovered_item.get('cooldown', 0) / 1000  # 转换为秒
+                        skill_description = self.hovered_item.get('description', '无描述')
+                        
+                        # 使用UI中已经加载的支持中文的字体
+                        small_font = self.ui.small_font
+                        
+                        # 计算文本宽度
+                        max_width = max(
+                            small_font.size(skill_name)[0],
+                            small_font.size(f'等级: {skill_level}')[0],
+                            small_font.size(f'伤害: {skill_damage}')[0],
+                            small_font.size(f'范围: {skill_range}')[0],
+                            small_font.size(f'冷却: {skill_cooldown}秒')[0],
+                            small_font.size(skill_description)[0]
+                        )
+                        
+                        # 计算背景高度
+                        background_height = 110
+                        
+                        # 调整悬停信息位置，确保不会超出窗口
+                        if hover_y - background_height < 0:
+                            hover_y = pos[1] + 20  # 如果上方空间不够，显示在鼠标下方
+                        else:
+                            hover_y -= background_height
+                        
+                        # 确保信息不会超出窗口右侧
+                        if hover_x + max_width + 20 > self.width:
+                            hover_x = self.width - max_width - 30
+                        
+                        # 绘制半透明背景
+                        background_rect = pygame.Rect(hover_x, hover_y, max_width + 20, background_height)
+                        # 创建半透明表面
+                        transparent_surface = pygame.Surface((max_width + 20, background_height), pygame.SRCALPHA)
+                        # 填充半透明黑色
+                        transparent_surface.fill((30, 30, 30, 180))  # 最后一个参数是透明度，180表示半透明
+                        # 绘制边框
+                        pygame.draw.rect(transparent_surface, (100, 100, 100, 255), (0, 0, max_width + 20, background_height), 2)
+                        # 绘制到屏幕
+                        self.screen.blit(transparent_surface, (hover_x, hover_y))
+                        
+                        # 绘制技能信息
+                        name_text = small_font.render(skill_name, True, (255, 215, 0))
+                        self.screen.blit(name_text, (hover_x + 10, hover_y + 10))
+                        
+                        level_text = small_font.render(f'等级: {skill_level}', True, (255, 255, 255))
+                        self.screen.blit(level_text, (hover_x + 10, hover_y + 30))
+                        
+                        damage_text = small_font.render(f'伤害: {skill_damage}', True, (255, 0, 0))
+                        self.screen.blit(damage_text, (hover_x + 10, hover_y + 50))
+                        
+                        range_text = small_font.render(f'范围: {skill_range}', True, (0, 255, 0))
+                        self.screen.blit(range_text, (hover_x + 10, hover_y + 70))
+                        
+                        cooldown_text = small_font.render(f'冷却: {skill_cooldown}秒', True, (0, 0, 255))
+                        self.screen.blit(cooldown_text, (hover_x + 10, hover_y + 90))
+                    elif hasattr(self.hovered_item, 'name'):
+                        # 物品悬停信息
+                        item_name = self.hovered_item.name
+                        item_quantity = getattr(self.hovered_item, 'quantity', 1)
+                        item_type = getattr(self.hovered_item, 'type', '未知')
+                        item_description = getattr(self.hovered_item, 'description', '无描述')
+                        
+                        # 使用UI中已经加载的支持中文的字体
+                        small_font = self.ui.small_font
+                        
+                        # 计算文本宽度
+                        max_width = max(
+                            small_font.size(item_name)[0],
+                            small_font.size(f'数量: {item_quantity}')[0],
+                            small_font.size(f'类型: {item_type}')[0],
+                            small_font.size(item_description)[0]
+                        )
+                        
+                        # 计算背景高度
+                        background_height = 80
+                        
+                        # 调整悬停信息位置，确保不会超出窗口
+                        if hover_y - background_height < 0:
+                            hover_y = pos[1] + 20  # 如果上方空间不够，显示在鼠标下方
+                        else:
+                            hover_y -= background_height
+                        
+                        # 确保信息不会超出窗口右侧
+                        if hover_x + max_width + 20 > self.width:
+                            hover_x = self.width - max_width - 30
+                        
+                        # 绘制半透明背景
+                        background_rect = pygame.Rect(hover_x, hover_y, max_width + 20, background_height)
+                        # 创建半透明表面
+                        transparent_surface = pygame.Surface((max_width + 20, background_height), pygame.SRCALPHA)
+                        # 填充半透明黑色
+                        transparent_surface.fill((30, 30, 30, 180))  # 最后一个参数是透明度，180表示半透明
+                        # 绘制边框
+                        pygame.draw.rect(transparent_surface, (100, 100, 100, 255), (0, 0, max_width + 20, background_height), 2)
+                        # 绘制到屏幕
+                        self.screen.blit(transparent_surface, (hover_x, hover_y))
+                        
+                        # 绘制物品信息
+                        name_text = small_font.render(item_name, True, (255, 215, 0))
+                        self.screen.blit(name_text, (hover_x + 10, hover_y + 10))
+                        
+                        quantity_text = small_font.render(f'数量: {item_quantity}', True, (255, 255, 255))
+                        self.screen.blit(quantity_text, (hover_x + 10, hover_y + 25))
+                        
+                        type_text = small_font.render(f'类型: {item_type}', True, (255, 255, 255))
+                        self.screen.blit(type_text, (hover_x + 10, hover_y + 40))
+                        
+                        desc_text = small_font.render(item_description, True, (200, 200, 200))
+                        self.screen.blit(desc_text, (hover_x + 10, hover_y + 55))
             elif self.game_state == GameState.BATTLE:
                 self.ui.render_battle()
             elif self.game_state == GameState.SHOP:
@@ -519,6 +832,98 @@ class Game:
         # 更新显示
         pygame.display.flip()
         
+    def handle_merchant_menu_events(self, event):
+        """处理商人菜单事件"""
+        if event.type == pygame.KEYDOWN:
+            if event.key == pygame.K_ESCAPE:
+                # 取消，关闭菜单
+                self.show_merchant_menu = False
+            elif event.key == pygame.K_UP:
+                # 上一个选项
+                self.selected_merchant_option = (self.selected_merchant_option - 1) % len(self.merchant_options)
+            elif event.key == pygame.K_DOWN:
+                # 下一个选项
+                self.selected_merchant_option = (self.selected_merchant_option + 1) % len(self.merchant_options)
+            elif event.key == pygame.K_RETURN:
+                # 确认选择
+                if self.current_merchant:
+                    npc = self.current_merchant
+                    if self.selected_merchant_option == 0:
+                        # 打开商店，使用NPC自己的商店物品
+                        shop_items = []
+                        if hasattr(npc, 'shop_items') and npc.shop_items:
+                            from src.core.id_manager import id_manager
+                            for item in npc.shop_items:
+                                # 尝试获取物品ID
+                                item_id = id_manager.get_item_id_by_name(item['name'])
+                                item_info = None
+                                if item_id:
+                                    item_info = id_manager.get_item_by_id(item_id)
+                                shop_items.append({"id": item_id, "name": item['name'], "price": item['price'], "quantity": item['quantity'], "info": item_info})
+                        else:
+                            # 默认商店物品
+                            from src.core.id_manager import id_manager
+                            shop_item_ids = [1001, 2001, 2003, 2004, 3001, 3002]
+                            for item_id in shop_item_ids:
+                                item_info = id_manager.get_item_by_id(item_id)
+                                if item_info:
+                                    # 根据物品类型设置价格
+                                    if item_info['type'] == 'weapon':
+                                        price = 100 if item_id == 1001 else 200
+                                    elif item_info['type'] == 'armor':
+                                        price = 50
+                                    elif item_info['type'] == 'helmet':
+                                        price = 30
+                                    elif item_info['type'] == 'boots':
+                                        price = 20
+                                    elif item_info['type'] == 'consumable':
+                                        price = 10 if item_id == 3001 else 15
+                                    else:
+                                        price = 50
+                                    shop_items.append({"id": item_id, "name": item_info['name'], "price": price, "quantity": 99, "info": item_info})
+                        
+                        # 打开商店界面
+                        self.ui.open_shop(shop_items)
+                        print(f"打开了{npc.name}的商店")
+                    elif self.selected_merchant_option == 1:
+                        # 打开回收界面
+                        self.ui.show_recycle = True
+                        print(f"打开了{npc.name}的物品回收")
+                # 关闭菜单
+                self.show_merchant_menu = False
+    
+    def render_merchant_menu(self):
+        """渲染商人菜单"""
+        # 绘制菜单背景
+        menu_width = 400
+        menu_height = 200
+        menu_x = self.width // 2 - menu_width // 2
+        menu_y = self.height // 2 - menu_height // 2
+        
+        # 绘制背景
+        pygame.draw.rect(self.screen, (0, 0, 0), (menu_x, menu_y, menu_width, menu_height))
+        pygame.draw.rect(self.screen, (100, 100, 100), (menu_x, menu_y, menu_width, menu_height), 2)
+        
+        # 使用UI中已经加载的支持中文的字体
+        title_font = self.ui.large_font
+        option_font = self.ui.font
+        prompt_font = self.ui.small_font
+        
+        # 绘制标题
+        if self.current_merchant:
+            title = title_font.render(f"与{self.current_merchant.name}对话", True, (255, 215, 0))
+            self.screen.blit(title, (menu_x + 20, menu_y + 20))
+        
+        # 绘制选项
+        for i, option in enumerate(self.merchant_options):
+            color = (255, 255, 255) if i == self.selected_merchant_option else (150, 150, 150)
+            text = option_font.render(f"{i+1}. {option}", True, color)
+            self.screen.blit(text, (menu_x + 40, menu_y + 80 + i * 40))
+        
+        # 绘制提示
+        prompt = prompt_font.render("按上下键选择，Enter确认，Escape取消", True, (150, 150, 150))
+        self.screen.blit(prompt, (menu_x + 40, menu_y + 160))
+
         # 控制帧率
         self.clock.tick(self.fps)
 

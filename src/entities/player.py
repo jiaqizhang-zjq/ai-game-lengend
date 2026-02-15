@@ -81,6 +81,10 @@ class Player:
         self.skill_hotkeys = {}  # 存储技能快捷键映射 {hotkey: skill_index}
         self.hotkey_skills = {}  # 反向映射 {skill_index: hotkey}
         
+        # 物品快捷键系统
+        self.item_hotkeys = {}  # 存储物品快捷键映射 {hotkey: item_index}
+        self.hotkey_items = {}  # 反向映射 {item_index: hotkey}
+        
         # 初始化物品栏 - 参考盛大传奇设计
         from src.core.id_manager import id_manager
         
@@ -237,6 +241,15 @@ class Player:
             if self.attack_frame >= 4:
                 self.is_attacking = False
                 self.attack_frame = 0
+        
+        # 处理物品快捷键（F1-F6）
+        for i in range(6):
+            key = getattr(pygame, f'K_F{i+1}')
+            if keys[key]:
+                hotkey = f'F{i+1}'
+                if hotkey in self.item_hotkeys:
+                    item_index = self.item_hotkeys[hotkey]
+                    self.use_item(item_index)
         
         # 限制位置在地图范围内
         if self.map:
@@ -436,12 +449,21 @@ class Player:
                         # 恢复生命值
                         self.heal(value)
                         print(f"使用{item.name}，恢复了{value}点生命值！")
+                        # 添加物品使用消息到聊天框
+                        if hasattr(self, 'game') and hasattr(self.game, 'ui') and hasattr(self.game.ui, 'add_game_message'):
+                            message = f"使用了{item.name}，恢复了{value}点生命值！"
+                            self.game.ui.add_game_message(message, (0, 255, 0), 3000)
                     elif effect == "magic":
                         # 恢复魔法值（这里可以添加魔法值系统）
                         print(f"使用{item.name}，恢复了{value}点魔法值！")
+                        # 添加物品使用消息到聊天框
+                        if hasattr(self, 'game') and hasattr(self.game, 'ui') and hasattr(self.game.ui, 'add_game_message'):
+                            message = f"使用了{item.name}，恢复了{value}点魔法值！"
+                            self.game.ui.add_game_message(message, (0, 0, 255), 3000)
                     
                     # 减少物品数量
                     self.item_manager.remove_item(item_index, 1)
+                    
                     return True
             elif item_type in ["weapon", "armor", "helmet", "boots"]:
                 # 装备物品
@@ -544,6 +566,44 @@ class Player:
             return True
         return False
     
+    def set_item_hotkey(self, item_index, hotkey):
+        """设置物品快捷键"""
+        # 检查物品索引是否有效
+        if 0 <= item_index < self.item_manager.get_item_count():
+            # 移除旧的快捷键映射
+            if item_index in self.hotkey_items:
+                old_hotkey = self.hotkey_items[item_index]
+                if old_hotkey in self.item_hotkeys:
+                    del self.item_hotkeys[old_hotkey]
+                del self.hotkey_items[item_index]
+            
+            # 设置新的快捷键映射
+            if hotkey:
+                # 移除新快捷键的旧映射
+                if hotkey in self.item_hotkeys:
+                    old_item_index = self.item_hotkeys[hotkey]
+                    if old_item_index in self.hotkey_items:
+                        del self.hotkey_items[old_item_index]
+                
+                # 设置新映射
+                self.item_hotkeys[hotkey] = item_index
+                self.hotkey_items[item_index] = hotkey
+                item_name = self.item_manager.get_item(item_index).name
+                print(f"设置物品快捷键: {item_name} -> {hotkey}")
+                return True
+        return False
+    
+    def remove_item_hotkey(self, hotkey):
+        """移除物品快捷键"""
+        if hotkey in self.item_hotkeys:
+            item_index = self.item_hotkeys[hotkey]
+            if item_index in self.hotkey_items:
+                del self.hotkey_items[item_index]
+            del self.item_hotkeys[hotkey]
+            print(f"移除物品快捷键: {hotkey}")
+            return True
+        return False
+    
     def show_profession_info(self):
         """显示职业信息"""
         print(f"{self.职业}职业初始化:")
@@ -625,6 +685,89 @@ class Player:
             # 触发攻击动画
             self.is_attacking = True
             self.attack_frame = 0
+            
+            # 播放技能使用声音
+            if hasattr(self, 'game'):
+                try:
+                    import numpy as np
+                    sample_rate = 44100
+                    
+                    # 根据职业生成不同的技能使用声音
+                    if self.职业 == "战士":
+                        # 战士技能：强力的刀剑声音
+                        duration = 0.4
+                        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+                        # 主频率
+                        frequency1 = 165  # E3音符
+                        # 泛音
+                        frequency2 = 330  # E4音符
+                        frequency3 = 495  # B4音符
+                        # 生成复合波形
+                        waveform1 = 0.5 * np.sin(2 * np.pi * frequency1 * t)
+                        waveform2 = 0.25 * np.sin(2 * np.pi * frequency2 * t)
+                        waveform3 = 0.1 * np.sin(2 * np.pi * frequency3 * t)
+                        # 添加攻击和衰减
+                        envelope = np.zeros_like(t)
+                        attack_time = int(sample_rate * 0.1)
+                        sustain_time = int(sample_rate * 0.1)
+                        release_time = int(sample_rate * 0.2)
+                        envelope[:attack_time] = np.linspace(0, 1, attack_time)
+                        envelope[attack_time:attack_time+sustain_time] = 1
+                        envelope[attack_time+sustain_time:attack_time+sustain_time+release_time] = np.linspace(1, 0, release_time)
+                        waveform = (waveform1 + waveform2 + waveform3) * envelope
+                    elif self.职业 == "法师":
+                        # 法师技能：魔法声音
+                        duration = 0.5
+                        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+                        # 魔法声音：复杂波形
+                        frequency = 1320  # E6音符
+                        # 添加颤音和变化
+                        vibrato_frequency = 3  # 3Hz颤音
+                        vibrato_amplitude = 0.1
+                        # 添加上升频率
+                        frequency_modulation = frequency * (1 + 0.2 * t / duration)
+                        waveform = 0.3 * np.sin(2 * np.pi * frequency_modulation * t + vibrato_amplitude * np.sin(2 * np.pi * vibrato_frequency * t))
+                        # 添加上升和下降
+                        envelope = np.zeros_like(t)
+                        attack_time = int(sample_rate * 0.15)
+                        release_time = int(sample_rate * 0.35)
+                        envelope[:attack_time] = np.linspace(0, 1, attack_time)
+                        envelope[attack_time:attack_time+release_time] = np.linspace(1, 0, release_time)
+                        waveform *= envelope
+                    elif self.职业 == "道士":
+                        # 道士技能：符咒声音
+                        duration = 0.45
+                        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+                        # 符咒声音：脉冲波 + 共鸣
+                        frequency = 660  # E5音符
+                        # 生成脉冲波
+                        pulse_wave = 0.3 * np.sign(np.sin(2 * np.pi * frequency * t))
+                        # 添加共鸣
+                        resonance_frequency = 220  # A3音符
+                        resonance = 0.1 * np.sin(2 * np.pi * resonance_frequency * t)
+                        waveform = pulse_wave + resonance
+                        # 添加衰减
+                        envelope = np.exp(-3 * t / duration)
+                        waveform *= envelope
+                    else:
+                        # 默认技能声音
+                        duration = 0.3
+                        frequency = 440  # A4音符
+                        t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+                        waveform = 0.4 * np.sin(2 * np.pi * frequency * t)
+                        envelope = np.exp(-4 * t / duration)
+                        waveform *= envelope
+                    
+                    # 转换为16位整数
+                    waveform = np.int16(waveform * 32767)
+                    
+                    # 创建声音对象
+                    sound = pygame.mixer.Sound(waveform)
+                    sound.set_volume(0.4)
+                    sound.play()
+                except:
+                    # 如果声音创建失败，忽略错误
+                    pass
             
             # 检查技能是否已学习
             if skill_name not in self.learned_skills:
@@ -727,7 +870,12 @@ class Player:
                     distance = math.sqrt(dx**2 + dy**2)
                     
                     if distance > skill_range:
-                        print(f"目标太远了！{skill_name}的攻击范围是{skill_range}，当前距离是{int(distance)}")
+                        message = f"目标太远了！{skill_name}的攻击范围是{skill_range}，当前距离是{int(distance)}"
+                        print(message)
+                        # 简化条件检查，确保消息能显示
+                        if hasattr(self, 'game') and hasattr(self.game, 'ui'):
+                            if hasattr(self.game.ui, 'add_game_message'):
+                                self.game.ui.add_game_message(message, (255, 0, 0), 3000)
                         return False
                     
                     # 根据伤害类型计算伤害
@@ -741,6 +889,11 @@ class Player:
                     
                     actual_damage = target.take_damage(damage)
                     print(f"使用{skill_name}，对{target.name}造成{actual_damage}点伤害！")
+                    
+                    # 添加伤害消息到聊天框
+                    if hasattr(self, 'game') and hasattr(self.game, 'ui') and hasattr(self.game.ui, 'add_game_message'):
+                        message = f"使用{skill_name}，对{target.name}造成{actual_damage}点伤害！"
+                        self.game.ui.add_game_message(message, (255, 0, 0), 3000)
                     
                     # 显示伤害值
                     if self.game and hasattr(self.game, 'ui') and hasattr(self.game.ui, 'add_damage_text'):
@@ -785,6 +938,11 @@ class Player:
                                             # 添加掉落物品提示
                                             if hasattr(self, 'game') and hasattr(self.game, "ui") and hasattr(self.game.ui, "add_item_drop"):
                                                 self.game.ui.add_item_drop(item_name, quantity, target.x, target.y)
+                                            
+                                            # 添加物品获得消息到聊天框
+                                            if hasattr(self, 'game') and hasattr(self.game, 'ui') and hasattr(self.game.ui, 'add_game_message'):
+                                                message = f"获得了{item_name}×{quantity}！"
+                                                self.game.ui.add_game_message(message, (255, 215, 0), 3000)
                                     else:
                                         # 保持向后兼容，使用物品名称
                                         item_name = item["name"]
@@ -815,7 +973,10 @@ class Player:
                         near_monsters = current_map.get_monsters_near_player(self, distance=skill_range)
                         
                         if not near_monsters:
-                            print(f"范围内没有怪物！{skill_name}的攻击范围是{skill_range}")
+                            message = f"范围内没有怪物！{skill_name}的攻击范围是{skill_range}"
+                            print(message)
+                            if hasattr(self, 'game') and hasattr(self.game, 'ui') and hasattr(self.game.ui, 'add_game_message'):
+                                self.game.ui.add_game_message(message, (255, 0, 0), 3000)
                             # 打印所有怪物的位置，用于调试
                             print(f"地图上的怪物数量: {len(current_map.monsters)}")
                             for i, monster in enumerate(current_map.monsters):
@@ -837,6 +998,11 @@ class Player:
                                 
                                 actual_damage = monster.take_damage(damage)
                                 print(f"使用{skill_name}，对{monster.name}造成{actual_damage}点伤害！")
+                                
+                                # 添加伤害消息到聊天框
+                                if hasattr(self, 'game') and hasattr(self.game, 'ui') and hasattr(self.game.ui, 'add_game_message'):
+                                    message = f"使用{skill_name}，对{monster.name}造成{actual_damage}点伤害！"
+                                    self.game.ui.add_game_message(message, (255, 0, 0), 3000)
                                 
                                 # 显示伤害值
                                 if self.game and hasattr(self.game, 'ui') and hasattr(self.game.ui, 'add_damage_text'):
@@ -881,6 +1047,12 @@ class Player:
                                                         # 添加掉落物品提示
                                                         if hasattr(self, 'game') and hasattr(self.game, "ui") and hasattr(self.game.ui, "add_item_drop"):
                                                             self.game.ui.add_item_drop(item_name, quantity, monster.x, monster.y)
+                                                        
+                                                        # 添加物品获得消息到聊天框
+                                                        if hasattr(self, 'game') and hasattr(self.game, 'ui') and hasattr(self.game.ui, 'add_game_message'):
+                                                            message = f"获得了{item_name}×{quantity}！"
+                                                            self.game.ui.add_game_message(message, (255, 215, 0), 3000)
+                                                            self.game.ui.add_game_message(message, (255, 215, 0), 3000)
                                                 else:
                                                     # 保持向后兼容，使用物品名称
                                                     item_name = item["name"]
@@ -910,7 +1082,7 @@ class Player:
                 print(f"使用{skill_name}，召唤出一个助手协助战斗！")
                 # 这里可以添加召唤的具体逻辑
             
-            # 设置冷却时间
+            # 技能使用成功，设置冷却时间
             self.skill_cooldowns[skill_name] = current_time
             return True
         except Exception as e:
@@ -972,6 +1144,76 @@ class Player:
         self.is_attacking = True
         self.attack_frame = 0
         
+        # 播放攻击声音
+        try:
+            import pygame
+            import numpy as np
+            sample_rate = 44100
+            
+            # 根据职业和攻击类型生成不同的声音
+            if self.职业 == "战士":
+                # 战士：物理攻击，刀剑声音
+                duration = 0.2
+                # 生成刀剑攻击的复合声音
+                t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+                # 主频率
+                frequency1 = 220  # A3音符
+                # 泛音
+                frequency2 = 440  # A4音符
+                frequency3 = 660  # E5音符
+                # 生成复合波形
+                waveform1 = 0.4 * np.sin(2 * np.pi * frequency1 * t)
+                waveform2 = 0.2 * np.sin(2 * np.pi * frequency2 * t)
+                waveform3 = 0.1 * np.sin(2 * np.pi * frequency3 * t)
+                # 添加衰减
+                envelope = np.exp(-5 * t / duration)
+                waveform = (waveform1 + waveform2 + waveform3) * envelope
+            elif self.职业 == "法师":
+                # 法师：魔法攻击，魔法声音
+                duration = 0.3
+                t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+                # 魔法声音：正弦波 + 颤音
+                frequency = 880  # A5音符
+                # 添加颤音
+                vibrato_frequency = 5  # 5Hz颤音
+                vibrato_amplitude = 0.05
+                waveform = 0.3 * np.sin(2 * np.pi * frequency * t + vibrato_amplitude * np.sin(2 * np.pi * vibrato_frequency * t))
+                # 添加上升和下降
+                envelope = np.zeros_like(t)
+                attack_time = int(sample_rate * 0.1)
+                release_time = int(sample_rate * 0.2)
+                envelope[:attack_time] = np.linspace(0, 1, attack_time)
+                envelope[attack_time:attack_time+release_time] = np.linspace(1, 0, release_time)
+                waveform *= envelope
+            elif self.职业 == "道士":
+                # 道士：道术攻击，符咒声音
+                duration = 0.25
+                t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+                # 符咒声音：脉冲波
+                frequency = 554  # C5音符
+                # 生成脉冲波
+                waveform = 0.3 * np.sign(np.sin(2 * np.pi * frequency * t))
+                # 添加衰减
+                envelope = np.exp(-4 * t / duration)
+                waveform *= envelope
+            else:
+                # 默认声音
+                duration = 0.15
+                frequency = 330  # E4音符
+                t = np.linspace(0, duration, int(sample_rate * duration), endpoint=False)
+                waveform = 0.5 * np.sin(2 * np.pi * frequency * t)
+            
+            # 转换为16位整数
+            waveform = np.int16(waveform * 32767)
+            
+            # 创建声音对象
+            sound = pygame.mixer.Sound(waveform)
+            sound.set_volume(0.3)
+            sound.play()
+        except:
+            # 如果声音创建失败，忽略错误
+            pass
+        
         # 计算攻击范围
         if self.职业 == "法师":
             # 法师：远程魔法攻击
@@ -1013,7 +1255,12 @@ class Player:
         distance = math.sqrt(dx**2 + dy**2)
         
         if distance > attack_range:
-            print(f"目标太远了！{self.职业}的攻击范围是{attack_range}，当前距离是{int(distance)}")
+            message = f"目标太远了！{self.职业}的攻击范围是{attack_range}，当前距离是{int(distance)}"
+            print(message)
+            # 确保消息能在游戏界面上显示
+            if hasattr(self, 'game') and hasattr(self.game, 'ui'):
+                if hasattr(self.game.ui, 'add_game_message'):
+                    self.game.ui.add_game_message(message, (255, 0, 0), 3000)
             return
         
         # 攻击目标怪物

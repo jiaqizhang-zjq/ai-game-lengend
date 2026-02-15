@@ -5,7 +5,7 @@ import os
 class BaseNPC:
     """基础NPC类"""
     
-    def __init__(self, name, x, y, dialogue, has_shop=False, map_type='村庄', npc_type='普通'):
+    def __init__(self, name, x, y, dialogue, has_shop=False, map_type='村庄', npc_type='普通', function=None):
         """初始化NPC"""
         self.name = name
         self.x, self.y = x, y
@@ -13,6 +13,7 @@ class BaseNPC:
         self.has_shop = has_shop
         self.map_type = map_type  # 地图类型
         self.npc_type = npc_type  # NPC类型
+        self.function = function  # NPC功能类型
         
         # 个性化属性
         self.personality = "友好"  # 性格
@@ -319,10 +320,15 @@ class BaseNPC:
         player_id = f"{player.职业}_{getattr(player, 'name', '冒险者')}"
         relationship = self.relationships.get(player_id, 0)
         
+        # 获取玩家等级
+        level = 1
+        if hasattr(player, 'game') and hasattr(player.game, 'level'):
+            level = player.game.level
+        
         # 基于玩家等级的对话
-        if player.level < 10:
+        if level < 10:
             level_dialogue = "年轻的冒险者，"
-        elif player.level < 20:
+        elif level < 20:
             level_dialogue = "勇敢的冒险者，"
         else:
             level_dialogue = "强大的冒险者，"
@@ -339,7 +345,7 @@ class BaseNPC:
                 return f"{level_dialogue}欢迎来到{self.map_type}！我是{self.name}，{self.background}。"
         elif len(self.dialogue_history) < 5:
             # 多次交互
-            if 'quest' in self.contextual_dialogue and player.level < 15:
+            if 'quest' in self.contextual_dialogue and level < 15:
                 return self.contextual_dialogue['quest']
             else:
                 return f"{level_dialogue}{mood_dialogue}我是{self.name}，{self.background}。"

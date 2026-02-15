@@ -34,12 +34,12 @@ class Map:
         # NPC列表
         self.npcs = []
         
+        # 初始化怪物和NPC
+        self.initialize_entities()
+        
         # 地形元素
         self.terrain_elements = []
         self.initialize_terrain()
-        
-        # 初始化怪物和NPC
-        self.initialize_entities()
         
         # 初始化坐标系统
         self._initialize_coordinate_system()
@@ -122,10 +122,10 @@ class Map:
                     {'type': 'religious', 'center': (1500, 800), 'radius': 150, 'density': 0.6}
                 ],
                 'elements': {
-                    'house': {'count': 8, 'cluster_weight': {'residential': 0.8, 'market': 0.2}},
+                    'house': {'count': 10, 'cluster_weight': {'residential': 0.8, 'market': 0.2}},
                     'well': {'count': 2, 'cluster_weight': {'residential': 0.7, 'market': 0.3}},
-                    'tree': {'count': 40, 'cluster_weight': {'residential': 0.4, 'market': 0.3, 'religious': 0.3}},
-                    'rock': {'count': 20, 'cluster_weight': {'residential': 0.3, 'market': 0.2, 'religious': 0.5}}
+                    'tree': {'count': 20, 'cluster_weight': {'residential': 0.4, 'market': 0.3, 'religious': 0.3}},
+                    'rock': {'count': 10, 'cluster_weight': {'residential': 0.3, 'market': 0.2, 'religious': 0.5}}
                 }
             },
             '森林': {
@@ -203,13 +203,44 @@ class Map:
                     x = max(32, min(self.width - 32, x))
                     y = max(32, min(self.height - 32, y))
                     
-                    # 添加元素
-                    self.terrain_elements.append({'type': element_type, 'x': x, 'y': y})
+                    # 检查是否在NPC活动区域内
+                    in_npc_area = False
+                    for npc_area in getattr(self, 'npc_activity_areas', []):
+                        area = npc_area.get('area', {})
+                        if 'x1' in area and 'y1' in area and 'x2' in area and 'y2' in area:
+                            if area['x1'] - 50 <= x <= area['x2'] + 50 and area['y1'] - 50 <= y <= area['y2'] + 50:
+                                in_npc_area = True
+                                break
+                    
+                    # 检查是否在建筑物位置附近
+                    in_building_area = False
+                    for npc_area in getattr(self, 'npc_activity_areas', []):
+                        building = npc_area.get('building', {})
+                        if building is not None and 'x' in building and 'y' in building:
+                            dx = x - building['x']
+                            dy = y - building['y']
+                            distance = math.sqrt(dx**2 + dy**2)
+                            if distance < 80:
+                                in_building_area = True
+                                break
+                    
+                    # 只有不在NPC活动区域和建筑物附近的元素才添加
+                    if not in_npc_area and not in_building_area:
+                        self.terrain_elements.append({'type': element_type, 'x': x, 'y': y})
         
         # 为特定地形添加特殊元素
         if self.scene_type == '村庄':
-            # 村庄添加祭坛
-            self.terrain_elements.append({'type': 'altar', 'x': 1500, 'y': 800})
+            # 村庄添加祭坛（避开NPC活动区域）
+            altar_x, altar_y = 1500, 800
+            in_npc_area = False
+            for npc_area in getattr(self, 'npc_activity_areas', []):
+                area = npc_area.get('area', {})
+                if 'x1' in area and 'y1' in area and 'x2' in area and 'y2' in area:
+                    if area['x1'] - 100 <= altar_x <= area['x2'] + 100 and area['y1'] - 100 <= altar_y <= area['y2'] + 100:
+                        in_npc_area = True
+                        break
+            if not in_npc_area:
+                self.terrain_elements.append({'type': 'altar', 'x': altar_x, 'y': altar_y})
         elif self.scene_type == '森林':
             # 森林添加神秘祭坛
             self.terrain_elements.append({'type': 'altar', 'x': 1200, 'y': 600})
@@ -357,11 +388,19 @@ class Map:
                 {'id': 4, 'x': 400, 'y': 400, 'dialogue': '来看看最新的防具！', 'has_shop': True, 'type': '村庄', 'role': '防具商', 'activity_area': {'x1': 350, 'y1': 350, 'x2': 450, 'y2': 450}, 'building': {'x': 800, 'y': 400}},
                 {'id': 5, 'x': 500, 'y': 200, 'dialogue': '我可以帮你修理装备！', 'has_shop': False, 'type': '村庄', 'role': '铁匠', 'activity_area': {'x1': 450, 'y1': 150, 'x2': 550, 'y2': 250}, 'building': {'x': 1200, 'y': 600}},
                 {'id': 6, 'x': 700, 'y': 300, 'dialogue': '学习魔法吗？', 'has_shop': True, 'type': '村庄', 'role': '法师', 'activity_area': {'x1': 650, 'y1': 250, 'x2': 750, 'y2': 350}, 'building': {'x': 1600, 'y': 400}},
-                {'id': 7, 'x': 600, 'y': 500, 'dialogue': '愿神保佑你！', 'has_shop': True, 'type': '村庄', 'role': '牧师', 'activity_area': {'x1': 550, 'y1': 450, 'x2': 650, 'y2': 550}, 'building': {'x': 800, 'y': 400}}
+                {'id': 7, 'x': 600, 'y': 500, 'dialogue': '愿神保佑你！', 'has_shop': True, 'type': '村庄', 'role': '牧师', 'activity_area': {'x1': 550, 'y1': 450, 'x2': 650, 'y2': 550}, 'building': {'x': 800, 'y': 400}},
+                {'id': 8, 'x': 800, 'y': 300, 'dialogue': '欢迎使用公共仓库！', 'has_shop': False, 'type': '村庄', 'role': '仓库管理员', 'activity_area': {'x1': 750, 'y1': 250, 'x2': 850, 'y2': 350}, 'building': {'x': 1200, 'y': 600}}
             ]
             for npc_data in village_npcs:
                 npc_info = id_manager.get_npc_by_id(npc_data['id'])
                 if npc_info:
+                    # 根据NPC类型设置功能
+                    function = None
+                    if npc_data['role'] == '仓库管理员':
+                        function = 'storage'
+                    elif npc_data['has_shop']:
+                        function = 'recycle'
+                    
                     npc = create_npc(
                         npc_info['name'],
                         npc_data['x'],
@@ -369,7 +408,8 @@ class Map:
                         npc_data['dialogue'],
                         npc_data['has_shop'],
                         npc_data['type'],
-                        npc_data['role']
+                        npc_data['role'],
+                        function
                     )
                     # 设置活动区域
                     npc.set_activity_area(npc_data['activity_area'])
@@ -1304,14 +1344,49 @@ class Map:
         return near_npcs
     
     def get_monster_at_position(self, x, y, distance=30):
-        """根据位置获取怪物"""
+        """根据位置获取怪物
+        
+        Args:
+            x: 世界坐标X
+            y: 世界坐标Y
+            distance: 检测距离
+            
+        Returns:
+            Monster对象或None
+        """
+        # 优先检测Boss怪物
         for monster in self.monsters:
             if not monster.is_dead():
-                dx = x - monster.x
-                dy = y - monster.y
-                dist = (dx**2 + dy**2)**0.5
-                if dist < distance:
-                    return monster
+                # 检查是否是Boss怪物
+                is_boss = False
+                if hasattr(monster, 'name'):
+                    if '王' in monster.name or '教主' in monster.name:
+                        is_boss = True
+                
+                # 为Boss使用更大的检测距离
+                if is_boss:
+                    boss_distance = 40  # Boss使用更大的检测距离
+                    dx = x - monster.x
+                    dy = y - monster.y
+                    dist = (dx**2 + dy**2)**0.5
+                    if dist < boss_distance:
+                        return monster
+        
+        # 然后检测普通怪物
+        for monster in self.monsters:
+            if not monster.is_dead():
+                # 跳过已经检查过的Boss
+                is_boss = False
+                if hasattr(monster, 'name'):
+                    if '王' in monster.name or '教主' in monster.name:
+                        is_boss = True
+                if not is_boss:
+                    dx = x - monster.x
+                    dy = y - monster.y
+                    dist = (dx**2 + dy**2)**0.5
+                    if dist < distance:
+                        return monster
+        
         return None
     
     def check_exit(self, player):

@@ -236,7 +236,10 @@ class BaseMonster:
             if os.path.exists(monster_sprite_path):
                 self.sprites['default'] = pygame.image.load(monster_sprite_path).convert_alpha()
                 # 缩放精灵到合适大小（根据怪物类型调整大小，符合盛大传奇风格）
-                if self.name in ['狼', '僵尸', '骷髅']:
+                if '王' in self.name or '教主' in self.name:
+                    # BOSS怪物，更大
+                    self.sprites['default'] = pygame.transform.scale(self.sprites['default'], (48, 48))
+                elif self.name in ['狼', '僵尸', '骷髅']:
                     # 较大的怪物
                     self.sprites['default'] = pygame.transform.scale(self.sprites['default'], (30, 30))
                 elif self.name in ['稻草人', '鸡', '鹿']:
@@ -318,7 +321,10 @@ class BaseMonster:
     def render_default(self, screen):
         """渲染默认怪物"""
         # 默认怪物（传奇风格）
-        if self.name in ['狼', '僵尸', '骷髅']:
+        if '王' in self.name or '教主' in self.name:
+            # BOSS怪物，更大
+            pygame.draw.rect(screen, (255, 0, 0), (self.x + 8, self.y + 8, 32, 32))
+        elif self.name in ['狼', '僵尸', '骷髅']:
             # 较大的怪物
             pygame.draw.rect(screen, (150, 50, 50), (self.x + 5, self.y + 5, 20, 20))
         elif self.name in ['稻草人', '鸡', '鹿']:

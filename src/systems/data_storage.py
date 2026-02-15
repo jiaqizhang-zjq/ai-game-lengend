@@ -10,7 +10,7 @@ class DataStorage:
         self.game = game
         self.save_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(__file__))), 'save')
         self._ensure_save_directory()
-        self.max_save_slots = 3  # 最大存档槽位数
+        self.max_save_slots = 20  # 最大存档槽位数
     
     def _ensure_save_directory(self):
         """确保保存目录存在"""
@@ -102,7 +102,8 @@ class DataStorage:
             'learned_skills': player.learned_skills,
             'skill_cooldowns': skill_cooldowns,
             'skill_hotkeys': getattr(player, 'skill_hotkeys', {}),
-            'hotkey_skills': getattr(player, 'hotkey_skills', {})
+            'hotkey_skills': getattr(player, 'hotkey_skills', {}),
+            'item_hotkeys': getattr(player, 'item_hotkeys', {})
         }
         
         # 保存到文件
@@ -229,6 +230,11 @@ class DataStorage:
                 except ValueError:
                     pass
             player.hotkey_skills = hotkey_skills if hotkey_skills else player.hotkey_skills
+        
+        # 加载物品快捷键设置
+        if hasattr(player, 'item_hotkeys'):
+            loaded_item_hotkeys = player_data.get('item_hotkeys', {})
+            player.item_hotkeys = loaded_item_hotkeys if loaded_item_hotkeys else player.item_hotkeys
     
     def _load_game_data(self, player_data):
         """加载游戏数据"""
@@ -265,3 +271,42 @@ class DataStorage:
         print(f"加载玩家位置: ({game.player.x}, {game.player.y})")
         print(f"屏幕尺寸: ({game.width}, {game.height})")
         print(f"更新相机位置: ({game.camera_x}, {game.camera_y})")
+    
+    def get_storage_file_path(self):
+        """获取公共仓库文件路径"""
+        return os.path.join(self.save_dir, 'public_storage.json')
+    
+    def save_storage_data(self, storage_items):
+        """保存公共仓库数据"""
+        storage_file = self.get_storage_file_path()
+        
+        # 收集仓库数据
+        storage_data = {
+            'items': storage_items,
+            'timestamp': time.time()
+        }
+        
+        # 保存到文件
+        with open(storage_file, 'w', encoding='utf-8') as f:
+            json.dump(storage_data, f, ensure_ascii=False, indent=2)
+        
+        print("公共仓库数据已保存！")
+        return True
+    
+    def load_storage_data(self):
+        """加载公共仓库数据"""
+        storage_file = self.get_storage_file_path()
+        if not os.path.exists(storage_file):
+            print("没有找到公共仓库数据！")
+            return []
+        
+        try:
+            with open(storage_file, 'r', encoding='utf-8') as f:
+                storage_data = json.load(f)
+            
+            storage_items = storage_data.get('items', [])
+            print("公共仓库数据加载成功！")
+            return storage_items
+        except Exception as e:
+            print(f"加载公共仓库数据失败: {e}")
+            return []

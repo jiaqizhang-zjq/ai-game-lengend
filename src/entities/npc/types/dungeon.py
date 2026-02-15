@@ -8,9 +8,9 @@ from ..behaviors.heal import HealBehavior
 class DungeonNPC(BaseNPC):
     """地牢NPC基类"""
     
-    def __init__(self, name, x, y, dialogue, has_shop=False, npc_type='普通'):
+    def __init__(self, name, x, y, dialogue, has_shop=False, npc_type='普通', function=None):
         """初始化地牢NPC"""
-        super().__init__(name, x, y, dialogue, has_shop, '地牢', npc_type)
+        super().__init__(name, x, y, dialogue, has_shop, '地牢', npc_type, function)
         
         # 初始化行为模块
         self.quest_behavior = QuestBehavior(self)

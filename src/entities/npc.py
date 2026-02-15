@@ -5,7 +5,7 @@ import math
 class NPC:
     """NPC类"""
     
-    def __init__(self, name, x, y, dialogue, has_shop=False, map_type='村庄', npc_type='普通'):
+    def __init__(self, name, x, y, dialogue, has_shop=False, map_type='村庄', npc_type='普通', function=None):
         """初始化NPC"""
         self.name = name
         self.x, self.y = x, y
@@ -13,6 +13,7 @@ class NPC:
         self.has_shop = has_shop
         self.map_type = map_type  # 地图类型
         self.npc_type = npc_type  # NPC类型
+        self.function = function  # NPC功能类型
         
         # 个性化属性
         self.personality = "友好"  # 性格

@@ -8,9 +8,9 @@ from ..behaviors.heal import HealBehavior
 class DesertNPC(BaseNPC):
     """沙漠NPC基类"""
     
-    def __init__(self, name, x, y, dialogue, has_shop=False, npc_type='普通'):
+    def __init__(self, name, x, y, dialogue, has_shop=False, npc_type='普通', function=None):
         """初始化沙漠NPC"""
-        super().__init__(name, x, y, dialogue, has_shop, '沙漠', npc_type)
+        super().__init__(name, x, y, dialogue, has_shop, '沙漠', npc_type, function)
         
         # 初始化行为模块
         self.quest_behavior = QuestBehavior(self)

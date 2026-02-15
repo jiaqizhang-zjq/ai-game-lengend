@@ -75,18 +75,33 @@ class IDManager:
             1003: {"name": "铜剑", "type": "weapon", "profession": "战士", "level": 10, "attack": 15, "range": 70},
             1004: {"name": "木杖", "type": "weapon", "profession": "法师", "level": 5, "attack": 3, "magic": 8, "range": 120},
             1005: {"name": "桃木剑", "type": "weapon", "profession": "道士", "level": 5, "attack": 5, "magic": 5, "range": 90},
+            1006: {"name": "弯刀", "type": "weapon", "profession": "all", "level": 8, "attack": 12, "range": 45},
+            1007: {"name": "精灵之弓", "type": "weapon", "profession": "all", "level": 12, "attack": 8, "range": 200},
+            1008: {"name": "斧头", "type": "weapon", "profession": "all", "level": 3, "attack": 7, "range": 35},
+            1009: {"name": "短剑", "type": "weapon", "profession": "all", "level": 6, "attack": 9, "range": 30},
             
             # 防具
             2001: {"name": "布衣", "type": "armor", "profession": "all", "level": 1, "defense": 2},
             2002: {"name": "铁甲", "type": "armor", "profession": "战士", "level": 5, "defense": 5},
             2003: {"name": "皮帽", "type": "helmet", "profession": "all", "level": 1, "defense": 1},
             2004: {"name": "草鞋", "type": "boots", "profession": "all", "level": 1, "defense": 1},
+            2005: {"name": "沙漠之靴", "type": "boots", "profession": "all", "level": 7, "defense": 3},
+            2006: {"name": "防晒头巾", "type": "helmet", "profession": "all", "level": 6, "defense": 2, "magic": 1},
+            2007: {"name": "自然之戒", "type": "ring", "profession": "all", "level": 10, "magic": 5},
             
             # 药水
             3001: {"name": "金疮药", "type": "consumable", "effect": "health", "value": 20},
             3002: {"name": "魔法药", "type": "consumable", "effect": "magic", "value": 15},
             3003: {"name": "超级金疮药", "type": "consumable", "effect": "health", "value": 50},
             3004: {"name": "超级魔法药", "type": "consumable", "effect": "magic", "value": 40},
+            3005: {"name": "水袋", "type": "consumable", "effect": "health", "value": 20},
+            3006: {"name": "自然药水", "type": "consumable", "effect": "health", "value": 40},
+            3007: {"name": "祝福药水", "type": "consumable", "effect": "magic", "value": 30},
+            3008: {"name": "面包", "type": "consumable", "effect": "health", "value": 10},
+            3009: {"name": "烤肉", "type": "consumable", "effect": "health", "value": 15},
+            3010: {"name": "葡萄酒", "type": "consumable", "effect": "health", "value": 25},
+            3011: {"name": "潜行药水", "type": "consumable", "effect": "special", "value": 0},
+            3012: {"name": "诅咒卷轴", "type": "consumable", "effect": "special", "value": 0},
             
             # 材料
             4001: {"name": "鸡毛", "type": "material"},
@@ -94,6 +109,16 @@ class IDManager:
             4003: {"name": "狼皮", "type": "material"},
             4004: {"name": "骷髅骨", "type": "material"},
             4005: {"name": "僵尸牙齿", "type": "material"},
+            4006: {"name": "腐烂的肉", "type": "material"},
+            4007: {"name": "稻草人之心", "type": "material"},
+            4008: {"name": "沃玛号角", "type": "material"},
+            4009: {"name": "祖玛头像", "type": "material"},
+            4010: {"name": "丝绸", "type": "material"},
+            4011: {"name": "香料", "type": "material"},
+            4012: {"name": "珠宝", "type": "material"},
+            4013: {"name": "灵魂石", "type": "material"},
+            4014: {"name": "柴火", "type": "material"},
+            4015: {"name": "开锁器", "type": "material"},
             
             # 技能书
             5001: {"name": "攻杀剑术技能书", "type": "skill_book", "skill_id": 102},
@@ -107,12 +132,7 @@ class IDManager:
             5009: {"name": "开天斩技能书", "type": "skill_book", "skill_id": 107},
             5010: {"name": "狂龙紫电技能书", "type": "skill_book", "skill_id": 206},
             5011: {"name": "道符连击技能书", "type": "skill_book", "skill_id": 308},
-            
-            # 材料
-            4006: {"name": "腐烂的肉", "type": "material"},
-            4007: {"name": "稻草人之心", "type": "material"},
-            4008: {"name": "沃玛号角", "type": "material"},
-            4009: {"name": "祖玛头像", "type": "material"}
+            5012: {"name": "黑暗魔法技能书", "type": "skill_book", "skill_id": 207}
         }
         
         # NPC ID索引
@@ -124,12 +144,13 @@ class IDManager:
             5: {"name": "铁匠", "type": "village", "function": "repair"},
             6: {"name": "法师", "type": "village", "function": "skill"},
             7: {"name": "牧师", "type": "village", "function": "heal"},
-            8: {"name": "精灵守卫", "type": "forest", "function": "dialogue"},
-            9: {"name": "德鲁伊", "type": "forest", "function": "skill"},
-            10: {"name": "商队首领", "type": "desert", "function": "trade"},
-            11: {"name": "沙漠向导", "type": "desert", "function": "dialogue"},
-            12: {"name": "地牢守卫", "type": "dungeon", "function": "dialogue"},
-            13: {"name": "黑暗法师", "type": "dungeon", "function": "skill"}
+            8: {"name": "仓库管理员", "type": "village", "function": "storage"},
+            9: {"name": "精灵守卫", "type": "forest", "function": "dialogue"},
+            10: {"name": "德鲁伊", "type": "forest", "function": "skill"},
+            11: {"name": "商队首领", "type": "desert", "function": "trade"},
+            12: {"name": "沙漠向导", "type": "desert", "function": "dialogue"},
+            13: {"name": "地牢守卫", "type": "dungeon", "function": "dialogue"},
+            14: {"name": "黑暗法师", "type": "dungeon", "function": "skill"}
         }
     
     def get_map_by_id(self, map_id):
